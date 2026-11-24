@@ -1,0 +1,24 @@
+// Проверка живого адреса: расчёт, service worker, офлайн-перезагрузка. Запуск: node scripts/live-check.mjs [url]
+import { chromium, devices } from '@playwright/test';
+const url = process.argv[2] ?? 'https://iselinnn.github.io/app/';
+const browser = await chromium.launch({ executablePath: process.env.SALIMETER_CHROME ?? '/opt/browser/chrome', args: ['--no-sandbox'] });
+const context = await browser.newContext({ ...devices['Pixel 7'], browserName: 'chromium' });
+const page = await context.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+await page.goto(url);
+await page.waitForSelector('.main-card');
+await page.locator('[data-field="reading"] [role="spinbutton"]').click();
+for (const d of '10230') await page.locator(`[data-key="${d}"]`).click();
+await page.waitForTimeout(500);
+const result = (await page.getByTestId('result').textContent()).slice(0, 40);
+await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 20000 }).catch(() => null);
+const sw = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((r) => `${r.scope} active=${!!r.active}`));
+const manifest = await page.evaluate(async () => { const m = await (await fetch('./manifest.webmanifest')).json(); return `${m.start_url} ${m.display}`; });
+await context.setOffline(true);
+await page.reload();
+const offlineOk = await page.waitForSelector('.main-card', { timeout: 15000 }).then(() => true).catch(() => false);
+await context.setOffline(false);
+console.log(JSON.stringify({ url, result, sw, manifest, offlineOk, errors }));
+await browser.close();

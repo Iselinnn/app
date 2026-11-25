@@ -1,5 +1,5 @@
 /** Стеклянная «командная строка»: поля показания и температуры, кнопка →, чипы быстрых значений, выезжающая клавиатура. */
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { fixed } from '../calc';
 import { categories } from '../store/categories';
 import { addMeasurement } from '../store/measurements';
@@ -191,6 +191,14 @@ export function CommandLine() {
   const open = keypadOpen.value;
   const [saved, setSaved] = useState(false);
   const tempUnit = s.tempUnit === 'f' ? '°F' : '°C';
+  const ref = useRef<HTMLElement>(null);
+
+  // на коротких экранах выехавшая клавиатура уходит под навигацию — подкручиваем страницу
+  useEffect(() => {
+    if (open && ref.current && typeof ref.current.scrollIntoView === 'function') {
+      ref.current.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }
+  }, [open]);
 
   const save = async (): Promise<void> => {
     tick();
@@ -216,7 +224,7 @@ export function CommandLine() {
   };
 
   return (
-    <section class="cmd glass" aria-label="Ввод">
+    <section class="cmd glass" aria-label="Ввод" ref={ref}>
       <div class="cmd-row">
         {m === 'measure' ? (
           <Field id="reading" label="показание" unit="" />

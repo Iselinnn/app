@@ -66,8 +66,12 @@ function MeasureHero() {
           цель <b>{fixed(s.target, 1)}</b>{' '}
           <span class={inRange ? 'dev-ok' : 'dev-off'}>{signed(dev, 1)}</span>
         </span>
-        <span class="sep">·</span>
-        <span>{SCALE_LABEL[s.scale]}</span>
+        {s.scale !== 'density' && (
+          <>
+            <span class="sep">·</span>
+            <span>{SCALE_LABEL[s.scale]}</span>
+          </>
+        )}
       </div>
       {s.showExtra && Number.isFinite(r.salinity) && (
         <div class="hint">

@@ -8,7 +8,7 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(url);
-await page.waitForSelector('.main-card');
+await page.waitForSelector('.cmd');
 const onboard = page.getByRole('dialog', { name: 'Категории замеров' });
 if (await onboard.isVisible().catch(() => false)) await onboard.getByRole('button', { name: /Позже|Готово/ }).click();
 await page.locator('[data-field="reading"]').click();
@@ -21,7 +21,7 @@ const sw = await page.evaluate(async () => (await navigator.serviceWorker.getReg
 const manifest = await page.evaluate(async () => { const m = await (await fetch('./manifest.webmanifest')).json(); return `${m.start_url} ${m.display}`; });
 await context.setOffline(true);
 await page.reload();
-const offlineOk = await page.waitForSelector('.main-card', { timeout: 15000 }).then(() => true).catch(() => false);
+const offlineOk = await page.waitForSelector('.cmd', { timeout: 15000 }).then(() => true).catch(() => false);
 await context.setOffline(false);
 console.log(JSON.stringify({ url, result, sw, manifest, offlineOk, errors }));
 await browser.close();

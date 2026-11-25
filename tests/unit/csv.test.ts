@@ -25,7 +25,7 @@ describe('CSV', () => {
     expect(back.error).toBeUndefined();
     expect(back.skipped).toBe(0);
     expect(back.rows).toHaveLength(2);
-    const sorted = [...back.rows].sort((a, b) => a.at - b.at);
+    const sorted = back.rows.map((r) => r.measurement).sort((a, b) => a.at - b.at);
     const orig = [...list].sort((a, b) => a.at - b.at);
     sorted.forEach((r, i) => {
       const o = orig[i]!;
@@ -53,9 +53,9 @@ describe('CSV', () => {
     expect(escapeCell('x\u0000y')).toBe('x y');
     const csv = toCsv([mk({ at: 1, note: '=HYPERLINK("http://evil")' })]);
     const line = csv.split('\r\n')[1] ?? '';
-    expect(line.endsWith(`"'=HYPERLINK(""http://evil"")"`)).toBe(true);
+    expect(line.endsWith(`"'=HYPERLINK(""http://evil"")",`)).toBe(true);
     const back = parseCsv(csv);
-    expect(back.rows[0]?.note).toBe(`'=HYPERLINK("http://evil")`);
+    expect(back.rows[0]?.measurement.note).toBe(`'=HYPERLINK("http://evil")`);
   });
 
   it('импорт: разделитель «;» и запятая в числах, BOM, разные форматы даты и булевых', () => {
@@ -67,13 +67,13 @@ describe('CSV', () => {
     const r = parseCsv(text);
     expect(r.error).toBeUndefined();
     expect(r.rows).toHaveLength(3);
-    expect(r.rows[0]?.glassCorrection).toBe(true);
-    expect(r.rows[0]?.note).toBe('привет');
-    expect(r.rows[1]?.at).toBe(1700000000000);
-    expect(r.rows[1]?.glassCorrection).toBe(false);
-    expect(r.rows[1]?.scale).toBe('sg254');
-    expect(r.rows[1]?.beta).toBe(2.5e-5);
-    expect(r.rows[2]?.scale).toBe('density');
+    expect(r.rows[0]?.measurement.glassCorrection).toBe(true);
+    expect(r.rows[0]?.measurement.note).toBe('привет');
+    expect(r.rows[1]?.measurement.at).toBe(1700000000000);
+    expect(r.rows[1]?.measurement.glassCorrection).toBe(false);
+    expect(r.rows[1]?.measurement.scale).toBe('sg254');
+    expect(r.rows[1]?.measurement.beta).toBe(2.5e-5);
+    expect(r.rows[2]?.measurement.scale).toBe('density');
   });
 
   it('импорт: мусорные строки пропускаются, ошибки структуры сообщаются', () => {
@@ -103,9 +103,23 @@ describe('CSV', () => {
     const r = parseCsv('date,reading,temperature_c\n2026-01-01T00:00:00Z,1.0230,25\n2026-01-01T00:00:00Z,' + '9'.repeat(400) + ',25\n');
     expect(r.rows).toHaveLength(1);
     expect(r.skipped).toBe(1);
-    expect(r.rows[0]?.note).toBe('');
-    expect(r.rows[0]?.beta).toBe(2.5e-5);
-    expect(r.rows[0]?.scale).toBe('density');
+    expect(r.rows[0]?.measurement.note).toBe('');
+    expect(r.rows[0]?.measurement.beta).toBe(2.5e-5);
+    expect(r.rows[0]?.measurement.scale).toBe('density');
+    expect(r.rows[0]?.categoryName).toBe('');
+  });
+
+  it('категория: экспортируется по имени и читается при импорте (с защитой от инъекции)', () => {
+    const names = new Map([['c1', 'Коллектор 6-17'], ['c2', '=SUM(1)']]);
+    const list = [mk({ at: 1000, categoryId: 'c1' }), mk({ at: 2000, categoryId: 'c2' }), mk({ at: 3000 })];
+    const csv = toCsv(list, (id) => (id ? (names.get(id) ?? null) : null));
+    expect(csv.split('\r\n')[0]?.endsWith(',category')).toBe(true);
+    expect(csv).toContain(',Коллектор 6-17');
+    expect(csv).toContain(`'=SUM(1)`);
+    const back = parseCsv(csv);
+    const byAt = back.rows.sort((a, b) => a.measurement.at - b.measurement.at);
+    expect(byAt.map((r) => r.categoryName)).toEqual(['Коллектор 6-17', '=SUM(1)', '']);
+    expect(byAt[0]?.measurement.categoryId).toBeNull();
   });
 
   it('splitCsv: кавычки, переносы в ячейках, пустые строки', () => {

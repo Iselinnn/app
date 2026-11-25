@@ -38,16 +38,19 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(req.url);
   if (url.origin !== sw.location.origin) return;
 
+  // ignoreVary: хостинги отдают Vary: Origin / Accept-Encoding, из-за чего запросы модулей
+  // (с заголовком Origin) не совпадали бы с закэшированными ответами.
+  const opts: CacheQueryOptions = { ignoreSearch: true, ignoreVary: true };
   if (req.mode === 'navigate') {
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => (await cache.match('./index.html')) ?? fetch(req)),
+      caches.open(CACHE_NAME).then(async (cache) => (await cache.match('./index.html', opts)) ?? fetch(req)),
     );
     return;
   }
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(req, { ignoreSearch: true });
+      const cached = await cache.match(req, opts);
       return cached ?? fetch(req);
     }),
   );

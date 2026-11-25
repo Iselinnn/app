@@ -1,11 +1,13 @@
-/** Настройки: расчёт, цель, единицы, вид, обитатели, отдача, данные. */
+/** Настройки: расчёт, цель, единицы, вид, обитатели, отдача, категории, данные. */
 import { useState } from 'preact/hooks';
 import { BETA_BOROSILICATE, BETA_SODA_LIME, fixed, parseDecimal } from '../calc';
-import { clearMeasurements, measurements } from '../store/measurements';
+import { addCategory, categories, removeCategory, renameCategory } from '../store/categories';
+import { clearMeasurements, detachCategory, measurements } from '../store/measurements';
 import { ACCENTS, ALL_SPECIES, DEFAULT_SETTINGS, resetSettings, settings, updateSettings, type Settings } from '../store/settings';
 import { NumInput, Segment, Setting, Slider, Swatches, Toggle } from './components';
 import { tick } from './haptics';
-import { SPECIES_NAME } from './strings';
+import { IconTrash } from './icons';
+import { PALETTE_NAME, SPECIES_NAME } from './strings';
 import { showToast } from './toast';
 
 const TARGET_COLORS = [
@@ -61,6 +63,61 @@ function NumberSetting({
   );
 }
 
+function CategoryRow({ id, name }: { id: string; name: string }) {
+  const [text, setText] = useState(name);
+  const commit = async (): Promise<void> => {
+    if (text.trim() === name) return;
+    try {
+      await renameCategory(id, text);
+    } catch (e) {
+      setText(name);
+      showToast(e instanceof Error ? e.message : 'Не удалось переименовать');
+    }
+  };
+  const remove = async (): Promise<void> => {
+    tick();
+    await detachCategory(id);
+    await removeCategory(id);
+    showToast(`Категория «${name}» удалена, замеры остались`);
+  };
+  return (
+    <div class="cat-item">
+      <input class="input" type="text" maxLength={32} value={text} aria-label={`Категория ${name}`} onInput={(e) => setText(e.currentTarget.value)} onBlur={() => void commit()} onKeyDown={(e) => { if (e.key === 'Enter') void commit(); }} />
+      <button type="button" class="icon-btn btn-danger" aria-label={`Удалить категорию ${name}`} onClick={() => void remove()}>
+        <IconTrash />
+      </button>
+    </div>
+  );
+}
+
+function CategoriesSetting() {
+  const list = categories.value;
+  const [text, setText] = useState('');
+  const create = async (): Promise<void> => {
+    try {
+      await addCategory(text);
+      setText('');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Не удалось создать категорию');
+    }
+  };
+  return (
+    <Setting title="Категории замеров" desc="Аквариум или система: при сохранении выбираете категорию, в истории — отдельный график">
+      <div class="cat-list">
+        {list.map((c) => (
+          <CategoryRow key={c.id} id={c.id} name={c.name} />
+        ))}
+        <div class="cat-item">
+          <input class="input" type="text" maxLength={32} placeholder="Новая категория" aria-label="Новая категория" value={text} onInput={(e) => setText(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') void create(); }} />
+          <button type="button" class="btn btn-ghost" disabled={!text.trim()} onClick={() => void create()}>
+            Создать
+          </button>
+        </div>
+      </div>
+    </Setting>
+  );
+}
+
 export function SettingsScreen() {
   const s = settings.value;
   const set = (patch: Partial<Settings>): void => updateSettings(patch);
@@ -68,9 +125,28 @@ export function SettingsScreen() {
   const [betaText, setBetaText] = useState((s.beta * 1e5).toFixed(2));
   const [kind, setKind] = useState(betaKind(s.beta));
 
+  const toggleTilt = async (on: boolean): Promise<void> => {
+    if (on) {
+      const DOE = (window as unknown as { DeviceOrientationEvent?: { requestPermission?: () => Promise<string> } }).DeviceOrientationEvent;
+      if (DOE && typeof DOE.requestPermission === 'function') {
+        try {
+          const res = await DOE.requestPermission();
+          if (res !== 'granted') {
+            showToast('Доступ к наклону не разрешён');
+            return;
+          }
+        } catch {
+          showToast('Доступ к наклону не разрешён');
+          return;
+        }
+      }
+    }
+    set({ tilt: on });
+  };
+
   return (
     <main class="screen" aria-label="Настройки">
-      <section class="card glass">
+      <section class="card">
         <h2>Расчёт</h2>
         <Setting title="Тип шкалы ареометра" desc="Aqua Medic Salimeter размечен в плотности, г/см³">
           <Segment
@@ -131,12 +207,12 @@ export function SettingsScreen() {
         />
       </section>
 
-      <section class="card glass">
+      <section class="card">
         <h2>Цель</h2>
         <div class="grid-2">
-          <NumberSetting id="target" label="Целевая" unit="‰" value={s.target} digits={1} min={0} max={60} onChange={(v) => set({ target: v })} />
+          <NumberSetting id="target" label="целевая" unit="‰" value={s.target} digits={1} min={0} max={60} onChange={(v) => set({ target: v })} />
           <div />
-          <NumberSetting id="target-min" label="Диапазон от" unit="‰" value={s.targetMin} digits={1} min={0} max={60} onChange={(v) => set({ targetMin: v })} />
+          <NumberSetting id="target-min" label="диапазон от" unit="‰" value={s.targetMin} digits={1} min={0} max={60} onChange={(v) => set({ targetMin: v })} />
           <NumberSetting id="target-max" label="до" unit="‰" value={s.targetMax} digits={1} min={0} max={60} onChange={(v) => set({ targetMax: v })} />
         </div>
         <Setting title="Цвет подсветки диапазона">
@@ -144,7 +220,7 @@ export function SettingsScreen() {
         </Setting>
       </section>
 
-      <section class="card glass">
+      <section class="card">
         <h2>Единицы</h2>
         <Setting title="Солёность">
           <Segment
@@ -185,7 +261,7 @@ export function SettingsScreen() {
         </Setting>
       </section>
 
-      <section class="card glass">
+      <section class="card">
         <h2>Вид</h2>
         <Setting title="Тема">
           <Segment
@@ -233,7 +309,7 @@ export function SettingsScreen() {
         </Setting>
       </section>
 
-      <section class="card glass">
+      <section class="card">
         <h2>Обитатели</h2>
         <Setting title="Кто плавает">
           <div class="chips" role="group" aria-label="Виды">
@@ -257,37 +333,50 @@ export function SettingsScreen() {
           </div>
         </Setting>
         <Setting title="Количество">
-          <Slider label="Количество обитателей" min={0} max={6} step={1} value={s.creatureCount} onChange={(v) => set({ creatureCount: v })} />
+          <Slider label="Количество обитателей" min={0} max={5} step={1} value={s.creatureCount} onChange={(v) => set({ creatureCount: v })} />
         </Setting>
         <Setting title="Скорость">
           <Slider label="Скорость" min={0.25} max={3} step={0.25} value={s.creatureSpeed} format={(v) => `${v}×`} onChange={(v) => set({ creatureSpeed: v })} />
         </Setting>
-        <Setting title="Размер пикселя">
-          <Slider label="Размер пикселя" min={4} max={10} step={1} value={s.pixelSize} format={(v) => `${v} px`} onChange={(v) => set({ pixelSize: v })} />
-        </Setting>
-        <Setting title="Цвет пикселей">
+        <Setting title="Шаг сетки мозаики">
           <Segment
             wide
-            label="Цвет пикселей"
-            value={s.pixelPalette}
-            onChange={(pixelPalette) => set({ pixelPalette })}
+            label="Шаг сетки"
+            value={String(s.gridStep)}
+            onChange={(v) => set({ gridStep: Number(v) as Settings['gridStep'] })}
             options={[
-              { value: 'mono', label: 'Монохром' },
-              { value: 'warm', label: 'Тёплый' },
-              { value: 'natural', label: 'Натуральные' },
+              { value: '10', label: '10 px' },
+              { value: '12', label: '12 px' },
+              { value: '14', label: '14 px' },
             ]}
           />
         </Setting>
+        <Setting title="Палитра мозаики">
+          <Segment
+            wide
+            label="Палитра мозаики"
+            value={s.mosaicPalette}
+            onChange={(mosaicPalette) => set({ mosaicPalette })}
+            options={[
+              { value: 'slate', label: PALETTE_NAME.slate },
+              { value: 'warm', label: PALETTE_NAME.warm },
+              { value: 'mixed', label: PALETTE_NAME.mixed },
+            ]}
+          />
+        </Setting>
+        <Setting title="Моно-подписи" desc="Название вида рядом с обитателем" control={<Toggle label="Моно-подписи" checked={s.monoLabels} onChange={(v) => set({ monoLabels: v })} />} />
+        <Setting title="Наклон телефона" desc="Течение чуть смещается при наклоне (нужно разрешение на датчики)" control={<Toggle label="Наклон телефона" checked={s.tilt} onChange={(v) => void toggleTilt(v)} />} />
       </section>
 
-      <section class="card glass">
+      <section class="card">
         <h2>Отдача</h2>
         <Setting title="Тактильная отдача" desc="Вибрация при нажатии клавиш (Android)" control={<Toggle label="Тактильная отдача" checked={s.haptics} onChange={(v) => set({ haptics: v })} />} />
         <Setting title="Звук нажатий" control={<Toggle label="Звук нажатий" checked={s.sound} onChange={(v) => set({ sound: v })} />} />
       </section>
 
-      <section class="card glass">
+      <section class="card">
         <h2>Данные</h2>
+        <CategoriesSetting />
         <Setting title="История замеров" desc={`${measurements.value.length} записей в IndexedDB на этом устройстве`}>
           <div class="btn-row">
             {confirmClear ? (
@@ -332,7 +421,7 @@ export function SettingsScreen() {
             </button>
           </div>
         </Setting>
-        <p class="version">Солемер {__APP_VERSION__} · EOS-80 (UNESCO 1981) · PSS-78 · работает офлайн</p>
+        <p class="version">солемер {__APP_VERSION__} · EOS-80 (UNESCO 1981) · PSS-78 · работает офлайн</p>
       </section>
     </main>
   );

@@ -1,8 +1,16 @@
-/** История: график, список замеров (удаление свайпом), экспорт и импорт CSV. */
+/** История: фильтр по категориям, график, список замеров (удаление свайпом), экспорт и импорт CSV. */
 import { useRef, useState } from 'preact/hooks';
 import { SCALE_LABEL, fixed } from '../calc';
+import { addCategory, categories, categoryName } from '../store/categories';
 import { parseCsv, toCsv } from '../store/csv';
-import { importMeasurements, measurements, measurementsError, removeMeasurement, restoreMeasurement, type Measurement } from '../store/measurements';
+import {
+  importMeasurements,
+  measurements,
+  measurementsError,
+  removeMeasurement,
+  restoreMeasurement,
+  type Measurement,
+} from '../store/measurements';
 import { settings } from '../store/settings';
 import { Chart } from './Chart';
 import { tick } from './haptics';
@@ -19,6 +27,7 @@ function HistoryItem({ m }: { m: Measurement }) {
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; start: number; id: number } | null>(null);
   const inRange = m.salinity >= s.targetMin && m.salinity <= s.targetMax;
+  const cat = categoryName(m.categoryId);
 
   const del = async (): Promise<void> => {
     tick();
@@ -32,7 +41,7 @@ function HistoryItem({ m }: { m: Measurement }) {
   };
 
   return (
-    <li class="hist-item" data-testid="hist-item">
+    <li class={dx < 0 || dragging ? 'hist-item is-open' : 'hist-item'} data-testid="hist-item">
       <button type="button" class="hist-delete" aria-label="Удалить замер" onClick={() => void del()} tabIndex={dx < 0 ? 0 : -1}>
         <IconTrash />
         Удалить
@@ -66,7 +75,7 @@ function HistoryItem({ m }: { m: Measurement }) {
           if (e.key === 'Delete' || e.key === 'Backspace') void del();
         }}
         tabIndex={0}
-        aria-label={`${fixed(m.salinity, 1)} ${SAL_UNIT[s.salinityUnit]}, ${fmt.format(m.at)}. Delete — удалить`}
+        aria-label={`${fixed(m.salinity, 1)} ${SAL_UNIT[s.salinityUnit]}, ${fmt.format(m.at)}${cat ? `, ${cat}` : ''}. Delete — удалить`}
       >
         <span class="hist-dot" style={{ background: inRange ? 'var(--ok)' : 'var(--warn)' }} aria-hidden="true" />
         <span class="hist-sal">
@@ -75,10 +84,11 @@ function HistoryItem({ m }: { m: Measurement }) {
         </span>
         <span class="hist-meta">
           <b>{fmt.format(m.at)}</b>
+          {cat && <span class="tag">{cat}</span>}
           {m.scale !== 'density' ? ` · ${SCALE_LABEL[m.scale]}` : ''}
           {m.glassCorrection ? '' : ' · без поправки'}
           <br />
-          {fixed(m.reading, 4)} · {fixed(m.temperature, 1)} °C · ρ₂₅ {fixed(m.density25 / 1000, 4)}
+          {fixed(m.reading, 4)} · {fixed(m.temperature, 1)} °C
         </span>
       </div>
     </li>
@@ -87,7 +97,7 @@ function HistoryItem({ m }: { m: Measurement }) {
 
 async function exportCsv(list: Measurement[]): Promise<void> {
   tick();
-  const csv = toCsv(list);
+  const csv = toCsv(list, categoryName);
   const name = `salimeter-${new Date().toISOString().slice(0, 10)}.csv`;
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
@@ -113,8 +123,12 @@ async function exportCsv(list: Measurement[]): Promise<void> {
 }
 
 export function HistoryScreen() {
-  const list = measurements.value;
+  const all = measurements.value;
+  const cats = categories.value;
+  const [filter, setFilter] = useState<string>('all');
+  const list = filter === 'all' ? all : filter === 'none' ? all.filter((m) => !m.categoryId) : all.filter((m) => m.categoryId === filter);
   const fileRef = useRef<HTMLInputElement>(null);
+  const hasUncategorized = all.some((m) => !m.categoryId);
 
   const onFile = async (input: HTMLInputElement): Promise<void> => {
     const file = input.files?.[0];
@@ -131,7 +145,12 @@ export function HistoryScreen() {
       return;
     }
     try {
-      const r = await importMeasurements(parsed.rows);
+      const rows: Measurement[] = [];
+      for (const row of parsed.rows) {
+        const categoryId = row.categoryName ? (await addCategory(row.categoryName)).id : null;
+        rows.push({ ...row.measurement, categoryId });
+      }
+      const r = await importMeasurements(rows);
       const skipped = r.skipped + parsed.skipped;
       showToast(`Импортировано ${r.added}${skipped ? `, пропущено ${skipped}` : ''}`);
     } catch (e) {
@@ -141,11 +160,31 @@ export function HistoryScreen() {
 
   return (
     <main class="screen" aria-label="История">
-      <section class="card glass">
-        <h2>Солёность по времени</h2>
+      {cats.length > 0 && (
+        <div class="filter-row" role="group" aria-label="Категория">
+          <button type="button" class="chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
+            все
+          </button>
+          {cats.map((c) => (
+            <button key={c.id} type="button" class="chip" aria-pressed={filter === c.id} onClick={() => setFilter(c.id)}>
+              {c.name}
+            </button>
+          ))}
+          {hasUncategorized && (
+            <button type="button" class="chip chip-muted" aria-pressed={filter === 'none'} onClick={() => setFilter('none')}>
+              без категории
+            </button>
+          )}
+        </div>
+      )}
+      <section class="card">
+        <h2>
+          Солёность по времени
+          {filter !== 'all' && <span class="count">{filter === 'none' ? 'без категории' : categoryName(filter)}</span>}
+        </h2>
         <Chart data={list} />
       </section>
-      <section class="card glass">
+      <section class="card">
         <div class="row-between">
           <h2>
             Замеры<span class="count">{list.length}</span>

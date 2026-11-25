@@ -9,22 +9,9 @@ function Svg({ children }: { children: ComponentChildren }) {
   );
 }
 
-export const IconHistory = () => (
+export const IconArrow = () => (
   <Svg>
-    <circle cx="12" cy="12" r="8.25" />
-    <path d="M12 7.5V12l3 2" />
-  </Svg>
-);
-export const IconSettings = () => (
-  <Svg>
-    <path d="M4 7h7.5M17.5 7H20M4 17h3.5M13.5 17H20" />
-    <circle cx="14.5" cy="7" r="2.25" />
-    <circle cx="10.5" cy="17" r="2.25" />
-  </Svg>
-);
-export const IconDrop = () => (
-  <Svg>
-    <path d="M12 3.5c3.2 4.1 6 7.3 6 10.6a6 6 0 0 1-12 0c0-3.3 2.8-6.5 6-10.6Z" />
+    <path d="M4.5 12h15M13 5.5l6.5 6.5-6.5 6.5" />
   </Svg>
 );
 export const IconClose = () => (

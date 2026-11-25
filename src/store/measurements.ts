@@ -16,6 +16,8 @@ export interface Measurement {
   /** кг/м³ */
   density25: number;
   note: string;
+  /** Категория (например, аквариум или система); null — без категории. */
+  categoryId: string | null;
 }
 
 export const measurements = signal<Measurement[]>([]);
@@ -61,8 +63,10 @@ export function sanitizeMeasurement(raw: unknown): Measurement | null {
   const res = measure(r.reading, r.temperature, { scale, glassCorrection: r.glassCorrection, beta: r.beta });
   if (!Number.isFinite(res.salinity) || !Number.isFinite(res.density25)) return null;
   const id = typeof r.id === 'string' && /^[\w-]{1,64}$/.test(r.id) ? r.id : newId();
+  const categoryId = typeof r.categoryId === 'string' && /^[\w-]{1,64}$/.test(r.categoryId) ? r.categoryId : null;
   return {
     id,
+    categoryId,
     at: Math.round(r.at),
     reading: r.reading,
     temperature: r.temperature,
@@ -99,7 +103,11 @@ export async function loadMeasurements(): Promise<void> {
 }
 
 export async function addMeasurement(
-  input: Omit<Measurement, 'id' | 'at' | 'salinity' | 'density25' | 'note'> & { at?: number; note?: string },
+  input: Omit<Measurement, 'id' | 'at' | 'salinity' | 'density25' | 'note' | 'categoryId'> & {
+    at?: number;
+    note?: string;
+    categoryId?: string | null;
+  },
 ): Promise<Measurement> {
   const m = sanitizeMeasurement({ ...input, at: input.at ?? Date.now(), id: newId() });
   if (!m) throw new Error('Некорректный замер');
@@ -158,6 +166,18 @@ export async function importMeasurements(list: Measurement[]): Promise<{ added: 
   }
   measurements.value = [...fresh, ...measurements.value].sort(byTimeDesc);
   return { added: fresh.length, skipped: list.length - fresh.length };
+}
+
+/** Снять категорию со всех замеров (при удалении категории). */
+export async function detachCategory(categoryId: string): Promise<void> {
+  const affected = measurements.value.filter((m) => m.categoryId === categoryId).map((m) => ({ ...m, categoryId: null }));
+  if (affected.length === 0) return;
+  try {
+    await dbPutMany('measurements', affected);
+  } catch (e) {
+    fail(e);
+  }
+  measurements.value = measurements.value.map((m) => (m.categoryId === categoryId ? { ...m, categoryId: null } : m));
 }
 
 export async function clearMeasurements(): Promise<void> {

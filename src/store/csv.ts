@@ -11,6 +11,7 @@ export const CSV_COLUMNS = [
   'salinity_permille',
   'density25_kg_m3',
   'note',
+  'category',
 ] as const;
 
 export const CSV_MAX_BYTES = 2 * 1024 * 1024;
@@ -30,7 +31,7 @@ function numberCell(n: number, digits: number): string {
   return NUMERIC.test(s) ? s : '';
 }
 
-export function toCsv(list: Measurement[]): string {
+export function toCsv(list: Measurement[], categoryNameOf: (id: string | null) => string | null = () => null): string {
   const lines = [CSV_COLUMNS.join(',')];
   for (const m of [...list].sort((a, b) => a.at - b.at)) {
     lines.push(
@@ -44,6 +45,7 @@ export function toCsv(list: Measurement[]): string {
         numberCell(m.salinity, 2),
         numberCell(m.density25, 2),
         escapeCell(m.note),
+        escapeCell(categoryNameOf(m.categoryId) ?? ''),
       ].join(','),
     );
   }
@@ -111,8 +113,14 @@ function parseDate(s: string | undefined): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
+export interface CsvImportRow {
+  measurement: Measurement;
+  /** Название категории из файла (пусто — без категории); сопоставляется при импорте. */
+  categoryName: string;
+}
+
 export interface CsvImportResult {
-  rows: Measurement[];
+  rows: CsvImportRow[];
   skipped: number;
   error?: string;
 }
@@ -143,7 +151,7 @@ export function parseCsv(text: string): CsvImportResult {
     return v === undefined || v === '' ? fallback : v;
   };
   const allowComma = delimiter === ';';
-  const rows: Measurement[] = [];
+  const rows: CsvImportRow[] = [];
   let skipped = 0;
   for (const row of table.slice(1)) {
     const glassRaw = colOr(row, 'glass_correction', 'true').toLowerCase();
@@ -161,8 +169,11 @@ export function parseCsv(text: string): CsvImportResult {
       beta: parseNum(colOr(row, 'beta', '2.5e-5'), false),
       note: col(row, 'note') ?? '',
     });
-    if (m) rows.push(m);
-    else skipped++;
+    if (m) {
+      let categoryName = (col(row, 'category') ?? '').replace(/[\p{Cc}]/gu, ' ').trim().slice(0, 32);
+      if (categoryName.startsWith("'")) categoryName = categoryName.slice(1);
+      rows.push({ measurement: m, categoryName });
+    } else skipped++;
   }
   return { rows, skipped };
 }

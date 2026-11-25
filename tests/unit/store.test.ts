@@ -12,10 +12,22 @@ import {
   updateSettings,
 } from '../../src/store/settings';
 import {
+  addCategory,
+  categories,
+  categoryName,
+  cleanCategoryName,
+  findCategoryByName,
+  loadCategories,
+  removeCategory,
+  renameCategory,
+  sanitizeCategory,
+} from '../../src/store/categories';
+import {
   LIMITS,
   addMeasurement,
   cleanNote,
   clearMeasurements,
+  detachCategory,
   importMeasurements,
   loadMeasurements,
   measurements,
@@ -31,6 +43,7 @@ async function freshDb(): Promise<void> {
   globalThis.indexedDB = new IDBFactory();
   localStorage.clear();
   measurements.value = [];
+  categories.value = [];
 }
 
 const base = {
@@ -58,11 +71,16 @@ describe('Настройки', () => {
       accent: 'teal',
       accentCustom: 'red',
       appName: 'Риф\u0000\u0007 ' + 'x'.repeat(40),
-      species: ['shark', 'dragon', 'ray'],
+      species: ['shark', 'dragon', 'ray', 'turtle'],
       creatureCount: 99,
       creatureSpeed: 2.5,
-      pixelSize: 7.4,
-      pixelPalette: 'natural',
+      gridStep: 14,
+      mosaicPalette: 'warm',
+      monoLabels: true,
+      tilt: 'no',
+      heroUnit: 'sg',
+      lastCategoryId: 'bad id',
+      categoriesOffered: true,
       haptics: 'yes',
       sound: true,
     });
@@ -80,8 +98,15 @@ describe('Настройки', () => {
     expect(s.species).toEqual(['shark', 'ray']);
     expect(s.creatureCount).toBe(DEFAULT_SETTINGS.creatureCount);
     expect(s.creatureSpeed).toBe(2.5);
-    expect(s.pixelSize).toBe(7);
-    expect(s.pixelPalette).toBe('natural');
+    expect(s.gridStep).toBe(14);
+    expect(s.mosaicPalette).toBe('warm');
+    expect(s.monoLabels).toBe(true);
+    expect(s.tilt).toBe(false);
+    expect(s.heroUnit).toBe('sg');
+    expect(s.lastCategoryId).toBeNull();
+    expect(s.categoriesOffered).toBe(true);
+    expect(sanitizeSettings({ gridStep: 11 }).gridStep).toBe(12);
+    expect(sanitizeSettings({ lastCategoryId: 'abc-1' }).lastCategoryId).toBe('abc-1');
     expect(s.haptics).toBe(true);
     expect(s.sound).toBe(true);
     expect(sanitizeSettings({ appName: '   ' }).appName).toBe(DEFAULT_SETTINGS.appName);
@@ -285,5 +310,45 @@ describe('Замеры', () => {
     await expect(removeMeasurement('x')).rejects.toThrow();
     await expect(restoreMeasurement(measurements.value[0]!)).rejects.toThrow();
     await closeDb();
+  });
+});
+
+describe('Категории', () => {
+  beforeEach(freshDb);
+
+  it('создание, дубли, переименование, удаление, снятие с замеров', async () => {
+    const a = await addCategory('  Коллектор   6-17 ');
+    expect(a.name).toBe('Коллектор 6-17');
+    const same = await addCategory('коллектор 6-17');
+    expect(same.id).toBe(a.id);
+    const b = await addCategory('Дисплей');
+    expect(categories.value.map((c) => c.name)).toEqual(['Дисплей', 'Коллектор 6-17']);
+    await expect(addCategory('   ')).rejects.toThrow();
+    await renameCategory(b.id, 'Дисплей 120 л');
+    expect(categoryName(b.id)).toBe('Дисплей 120 л');
+    await expect(renameCategory(b.id, 'Коллектор 6-17')).rejects.toThrow(/уже есть/);
+    await expect(renameCategory('nope', 'x')).rejects.toThrow();
+    expect(findCategoryByName('ДИСПЛЕЙ 120 Л')?.id).toBe(b.id);
+    const m = await addMeasurement({ ...base, at: 10, categoryId: a.id });
+    expect(m.categoryId).toBe(a.id);
+    await detachCategory(a.id);
+    expect(measurements.value[0]?.categoryId).toBeNull();
+    await detachCategory(a.id);
+    await removeCategory(a.id);
+    expect(categoryName(a.id)).toBeNull();
+    expect(categoryName(null)).toBeNull();
+    categories.value = [];
+    await loadCategories();
+    expect(categories.value.map((c) => c.name)).toEqual(['Дисплей 120 л']);
+  });
+
+  it('sanitizeCategory и лимит', async () => {
+    expect(sanitizeCategory(null)).toBeNull();
+    expect(sanitizeCategory({ name: '' })).toBeNull();
+    expect(sanitizeCategory({ name: 'x'.repeat(50), id: 'bad id', createdAt: -5 })?.name).toHaveLength(32);
+    expect(sanitizeCategory({ name: 'ok', id: 'id-1', createdAt: 5 })).toEqual({ name: 'ok', id: 'id-1', createdAt: 5 });
+    expect(cleanCategoryName(5)).toBe('');
+    for (let i = 0; i < 50; i++) await addCategory(`Категория ${i}`);
+    await expect(addCategory('Лишняя')).rejects.toThrow(/Не больше/);
   });
 });

@@ -1,7 +1,6 @@
 import { settings } from '../store/settings';
-import { tick } from './haptics';
-import { IconClose, IconDrop, IconHistory, IconSettings } from './icons';
-import { go, screen, type Screen } from './state';
+import { Segment } from './components';
+import { go, mode, screen, setMode } from './state';
 
 function BrandName({ name }: { name: string }) {
   const i = name.indexOf('.');
@@ -16,24 +15,6 @@ function BrandName({ name }: { name: string }) {
   );
 }
 
-function NavButton({ to, label, children }: { to: Screen; label: string; children: preact.ComponentChildren }) {
-  const current = screen.value === to;
-  return (
-    <button
-      type="button"
-      class="icon-btn"
-      aria-label={label}
-      aria-current={current ? 'page' : undefined}
-      onClick={() => {
-        tick();
-        go(to);
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 export function Header() {
   const name = settings.value.appName;
   const onMain = screen.value === 'measure';
@@ -45,33 +26,17 @@ export function Header() {
           <span class="visually-hidden">, на главный экран</span>
         </button>
       </h1>
-      <nav class="pill glass nav" aria-label="Разделы">
-        {onMain ? (
-          <>
-            <NavButton to="history" label="История">
-              <IconHistory />
-            </NavButton>
-            <NavButton to="water" label="Подмена воды">
-              <IconDrop />
-            </NavButton>
-            <NavButton to="settings" label="Настройки">
-              <IconSettings />
-            </NavButton>
-          </>
-        ) : (
-          <button
-            type="button"
-            class="icon-btn"
-            aria-label="Закрыть"
-            onClick={() => {
-              tick();
-              go('measure');
-            }}
-          >
-            <IconClose />
-          </button>
-        )}
-      </nav>
+      {onMain && (
+        <Segment
+          label="Режим"
+          value={mode.value}
+          onChange={setMode}
+          options={[
+            { value: 'measure', label: 'замер' },
+            { value: 'reverse', label: 'обратный' },
+          ]}
+        />
+      )}
     </header>
   );
 }

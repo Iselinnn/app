@@ -7,8 +7,12 @@ const widths = (process.env.WIDTHS ?? '360,390,430').split(',').map(Number);
 mkdirSync('.shots', { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.SALIMETER_CHROME ?? '/opt/browser/chrome', args: ['--no-sandbox'] });
 
-async function key(page, k) {
-  await page.locator(`[data-key="${k}"]`).click();
+const key = (page, k) => page.locator(`[data-key="${k}"]`).click();
+const nav = (page, name) => page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name }).click();
+async function enter(page, field, digits) {
+  await page.locator(`[data-field="${field}"]`).click();
+  for (const d of digits) await key(page, d);
+  await page.getByRole('button', { name: 'готово' }).click();
 }
 
 for (const w of widths) {
@@ -18,43 +22,52 @@ for (const w of widths) {
   page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
   page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text()); });
   await page.goto(base);
-  await page.waitForSelector('.main-card');
+  await page.waitForSelector('.cmd');
+  // онбординг: создать категорию из примера и закрыть
+  const onboard = page.getByRole('dialog', { name: 'Категории замеров' });
+  if (await onboard.isVisible().catch(() => false)) {
+    await onboard.getByRole('button', { name: /Коллектор 6-17/ }).click();
+    await onboard.getByRole('button', { name: /Готово|Позже/ }).click();
+  }
   await page.waitForTimeout(400);
   for (const theme of ['fog', 'depth']) {
-    await page.getByRole('button', { name: 'Настройки' }).click();
+    await nav(page, 'настройки');
     await page.getByRole('button', { name: theme === 'fog' ? 'Туман' : 'Глубина' }).click();
-    await page.getByRole('button', { name: 'Закрыть' }).click();
-    await page.waitForSelector('.main-card');
+    await nav(page, 'замер');
+    await page.waitForSelector('.cmd');
     await page.waitForTimeout(500);
     await page.screenshot({ path: `.shots/${w}-${theme}-measure.png` });
-    // обратный режим
-    await page.getByRole('button', { name: 'Обратный' }).click();
+    await page.locator('[data-field="reading"]').click();
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `.shots/${w}-${theme}-keypad.png` });
+    await page.getByRole('button', { name: 'готово' }).click();
+    await page.getByRole('button', { name: 'обратный' }).click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: `.shots/${w}-${theme}-reverse.png` });
-    await page.getByRole('button', { name: 'Замер' }).click();
+    await page.getByRole('button', { name: 'замер', exact: true }).first().click();
     if (theme === 'fog') {
-      // пара замеров в историю
-      for (const [r, t] of [['10230', '250'], ['10235', '245'], ['10240', '260']]) {
-        await page.locator('[data-field="reading"] [role="spinbutton"]').click();
-        for (const ch of r) await key(page, ch);
-        await page.locator('[data-field="temp"] [role="spinbutton"]').click();
-        for (const ch of t) await key(page, ch);
-        await page.getByRole('button', { name: /Сохранить замер/ }).click();
+      for (const [r, t] of [['10230', '250'], ['10235', '245'], ['10240', '260'], ['10225', '255']]) {
+        await enter(page, 'reading', r);
+        await enter(page, 'temp', t);
+        await page.getByRole('button', { name: 'Сохранить замер' }).click();
+        const dlg = page.getByRole('dialog', { name: 'Куда сохранить замер' });
+        if (await dlg.isVisible().catch(() => false)) {
+          await dlg.getByRole('button', { name: /Коллектор/ }).click();
+          await dlg.getByRole('button', { name: 'Сохранить', exact: true }).click();
+        }
         await page.waitForTimeout(150);
       }
     }
-    await page.getByRole('button', { name: 'История' }).click();
-    await page.waitForTimeout(300);
+    await nav(page, 'история');
+    await page.waitForTimeout(400);
     await page.screenshot({ path: `.shots/${w}-${theme}-history.png` });
-    await page.getByRole('button', { name: 'Закрыть' }).click();
-    await page.getByRole('button', { name: 'Подмена воды' }).click();
+    await nav(page, 'долив');
     await page.waitForTimeout(300);
     await page.screenshot({ path: `.shots/${w}-${theme}-water.png` });
-    await page.getByRole('button', { name: 'Закрыть' }).click();
-    await page.getByRole('button', { name: 'Настройки' }).click();
+    await nav(page, 'настройки');
     await page.waitForTimeout(300);
     await page.screenshot({ path: `.shots/${w}-${theme}-settings.png`, fullPage: true });
-    await page.getByRole('button', { name: 'Закрыть' }).click();
+    await nav(page, 'замер');
   }
   await context.close();
 }

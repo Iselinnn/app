@@ -1,11 +1,13 @@
 import { useEffect } from 'preact/hooks';
 import { Background } from './bg/Background';
 import { updateReady } from './pwa/register';
+import { BottomNav } from './ui/BottomNav';
 import { Header } from './ui/Header';
 import { HistoryScreen } from './ui/HistoryScreen';
 import { MeasureScreen } from './ui/MeasureScreen';
+import { OnboardSheet, SaveSheet } from './ui/SaveSheet';
 import { SettingsScreen } from './ui/SettingsScreen';
-import { handlePopState, screen } from './ui/state';
+import { handlePopState, screen, sheet } from './ui/state';
 import { startThemeSync } from './ui/theme';
 import { hideToast, toast } from './ui/toast';
 import { WaterScreen } from './ui/WaterScreen';
@@ -54,6 +56,7 @@ export function App() {
     };
   }, []);
   const sc = screen.value;
+  const sh = sheet.value;
   return (
     <>
       <Background />
@@ -64,6 +67,9 @@ export function App() {
         {sc === 'water' && <WaterScreen />}
         {sc === 'settings' && <SettingsScreen />}
       </div>
+      <BottomNav />
+      {sh === 'save' && <SaveSheet />}
+      {sh === 'onboard' && <OnboardSheet />}
       <Toast />
       <UpdateBanner />
     </>

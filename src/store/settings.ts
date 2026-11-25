@@ -3,12 +3,14 @@ import { signal } from '@preact/signals';
 import { BETA_SODA_LIME, type ScaleType } from '../calc';
 import { dbGet, dbPut, hasIndexedDb } from './db';
 
-export type Species = 'shark' | 'hammerhead' | 'ray' | 'clownfish' | 'turtle' | 'moray';
-export const ALL_SPECIES: readonly Species[] = ['shark', 'hammerhead', 'ray', 'clownfish', 'turtle', 'moray'];
+export type Species = 'shark' | 'hammerhead' | 'ray' | 'moray' | 'school';
+export const ALL_SPECIES: readonly Species[] = ['shark', 'hammerhead', 'ray', 'moray', 'school'];
 
 export type Theme = 'fog' | 'depth' | 'auto';
 export type AccentName = 'wine' | 'coral' | 'teal' | 'lime' | 'custom';
-export type PixelPalette = 'mono' | 'warm' | 'natural';
+export type MosaicPalette = 'slate' | 'warm' | 'mixed';
+export type HeroUnit = 'permille' | 'sg' | 'rho';
+export type GridStep = 10 | 12 | 14;
 export type SalinityUnit = 'permille' | 'psu' | 'ppt';
 export type DensityUnit = 'gcm3' | 'kgm3';
 export type TempUnit = 'c' | 'f';
@@ -39,12 +41,22 @@ export interface Settings {
   species: Species[];
   creatureCount: number;
   creatureSpeed: number;
-  pixelSize: number;
-  pixelPalette: PixelPalette;
+  gridStep: GridStep;
+  mosaicPalette: MosaicPalette;
+  /** Моно-подписи с названием вида рядом с обитателями. */
+  monoLabels: boolean;
+  /** Наклон телефона сдвигает «течение» (DeviceOrientation). */
+  tilt: boolean;
   haptics: boolean;
   sound: boolean;
   /** Объём аквариума для подмены воды, л. */
   tankVolume: number;
+  /** Что показывать крупно: солёность, SG 25/25 или плотность при 25 °C. */
+  heroUnit: HeroUnit;
+  /** Категория, выбранная при последнем сохранении. */
+  lastCategoryId: string | null;
+  /** Предложение создать категории уже показывали. */
+  categoriesOffered: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -66,11 +78,16 @@ export const DEFAULT_SETTINGS: Settings = {
   species: [...ALL_SPECIES],
   creatureCount: 3,
   creatureSpeed: 1,
-  pixelSize: 6,
-  pixelPalette: 'warm',
+  gridStep: 12,
+  mosaicPalette: 'mixed',
+  monoLabels: false,
+  tilt: false,
   haptics: true,
   sound: false,
   tankVolume: 100,
+  heroUnit: 'permille',
+  lastCategoryId: null,
+  categoriesOffered: false,
 };
 
 const LS_KEY = 'salimeter.settings';
@@ -123,13 +140,18 @@ export function sanitizeSettings(raw: unknown): Settings {
     accentCustom: hex(r.accentCustom, d.accentCustom),
     appName,
     species,
-    creatureCount: Math.round(num(r.creatureCount, 0, 6, d.creatureCount)),
+    creatureCount: Math.round(num(r.creatureCount, 0, 5, d.creatureCount)),
     creatureSpeed: num(r.creatureSpeed, 0.25, 3, d.creatureSpeed),
-    pixelSize: Math.round(num(r.pixelSize, 4, 10, d.pixelSize)),
-    pixelPalette: pick(r.pixelPalette, ['mono', 'warm', 'natural'], d.pixelPalette),
+    gridStep: r.gridStep === 10 || r.gridStep === 12 || r.gridStep === 14 ? r.gridStep : d.gridStep,
+    mosaicPalette: pick(r.mosaicPalette, ['slate', 'warm', 'mixed'], d.mosaicPalette),
+    monoLabels: bool(r.monoLabels, d.monoLabels),
+    tilt: bool(r.tilt, d.tilt),
     haptics: bool(r.haptics, d.haptics),
     sound: bool(r.sound, d.sound),
     tankVolume: num(r.tankVolume, 1, 1_000_000, d.tankVolume),
+    heroUnit: pick(r.heroUnit, ['permille', 'sg', 'rho'], d.heroUnit),
+    lastCategoryId: typeof r.lastCategoryId === 'string' && /^[\w-]{1,64}$/.test(r.lastCategoryId) ? r.lastCategoryId : null,
+    categoriesOffered: bool(r.categoriesOffered, d.categoriesOffered),
   };
 }
 

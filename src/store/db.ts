@@ -1,9 +1,9 @@
 /** Тонкая обёртка над IndexedDB: одна база, два хранилища. */
 
 const DB_NAME = 'salimeter';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
-export type StoreName = 'measurements' | 'settings';
+export type StoreName = 'measurements' | 'settings' | 'categories';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -26,6 +26,9 @@ export function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('categories')) {
+        db.createObjectStore('categories', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => {

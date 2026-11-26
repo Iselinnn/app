@@ -59,7 +59,7 @@ function serviceWorkerPlugin(): Plugin {
       };
       walk(outDir);
       const precache = files
-        .filter((f) => f !== 'sw.js' && !f.endsWith('.map') && !f.endsWith('LICENSE.txt') && !f.startsWith('rot/'))
+        .filter((f) => f !== 'sw.js' && !f.endsWith('.map') && !f.endsWith('LICENSE.txt'))
         .sort();
       const hash = createHash('sha256');
       for (const f of precache) hash.update(f).update(readFileSync(join(outDir, f)));

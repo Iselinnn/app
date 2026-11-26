@@ -42,15 +42,11 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   // (с заголовком Origin) не совпадали бы с закэшированными ответами.
   const opts: CacheQueryOptions = { ignoreSearch: true, ignoreVary: true };
   if (req.mode === 'navigate') {
-    // Навигация только в корень приложения: вложенные страницы (например, ./rot/) живут отдельно.
-    const scopePath = new URL('./', sw.location.href).pathname;
-    if (url.pathname !== scopePath && url.pathname !== `${scopePath}index.html`) return;
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => (await cache.match('./index.html', opts)) ?? fetch(req)),
     );
     return;
   }
-  if (url.pathname.startsWith(`${new URL('./', sw.location.href).pathname}rot/`)) return;
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {

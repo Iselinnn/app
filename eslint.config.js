@@ -3,7 +3,7 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['dist', 'coverage', 'node_modules', 'playwright-report', 'test-results', '.shots', 'scripts'] },
+  { ignores: ['dist', 'coverage', 'node_modules', 'playwright-report', 'test-results', '.shots', 'scripts', 'public'] },
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   tseslint.configs.stylisticTypeChecked,

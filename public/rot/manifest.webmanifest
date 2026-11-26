@@ -1,0 +1,17 @@
+{
+  "name": "yep, it's code rotted",
+  "short_name": "code rotted",
+  "description": "Frutiger Aero, который code rotted: losercore, dark fantasy, пар, ямс в 6 часов. Но сначала посмотри на печеньку.",
+  "lang": "ru",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1a2e",
+  "theme_color": "#0b1a2e",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

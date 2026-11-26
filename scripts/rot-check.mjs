@@ -10,11 +10,15 @@ async function run(name, ctxOpts) {
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`${name}: ${m.text()}`); });
-  // сначала основное приложение, чтобы его SW был активен
-  await page.goto(base);
-  await page.waitForSelector('.cmd');
-  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 20000 }).catch(() => null);
-  await page.goto(base + 'rot/');
+  if (process.env.ROT_DIRECT) {
+    await page.goto(base);
+  } else {
+    // сначала основное приложение, чтобы его SW был активен
+    await page.goto(base);
+    await page.waitForSelector('.cmd');
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 20000 }).catch(() => null);
+    await page.goto(base + 'rot/');
+  }
   await page.waitForSelector('#cookie');
   const title = await page.title();
   await page.waitForTimeout(600);
